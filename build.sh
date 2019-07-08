@@ -18,6 +18,7 @@ docker run -v "$(pwd)/Generated:/app/Generated" \
            -e "BTCPAYGEN_ADDITIONAL_FRAGMENTS=" \
            -e "BTCPAYGEN_LIGHTNING=lnd" \
            -e "BTCPAYGEN_SUBNAME=" \
+           -e "BTCPAYGEN_EXCLUDE_FRAGMENTS=opt-add-tor" \
            --rm $BTCPAYGEN_DOCKER_IMAGE
 
 if [ "$BTCPAYGEN_REVERSEPROXY" == "nginx" ]; then
