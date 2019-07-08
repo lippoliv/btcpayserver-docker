@@ -18,6 +18,8 @@ services:
         - "39388"
       volumes:
         - "bitcoin_datadir:/data"
+      networks:
+        - btcpay
   nbxplorer:
       environment:
         NBXPLORER_CHAINS: "btc"
