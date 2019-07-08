@@ -12,9 +12,6 @@ services:
       NBXPLORER_BIND: 0.0.0.0:32838
       NBXPLORER_SIGNALFILESDIR: /datadir
     volumes:
-      - "nbxplorer_datadir:/datadir"
+      - "./nbxplorer_datadir:/datadir"
     networks:
       - btcpay
-
-volumes:
-    nbxplorer_datadir:
