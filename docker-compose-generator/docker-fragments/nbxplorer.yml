@@ -13,6 +13,8 @@ services:
       NBXPLORER_SIGNALFILESDIR: /datadir
     volumes:
       - "nbxplorer_datadir:/datadir"
+    networks:
+      - btcpay
 
 volumes:
     nbxplorer_datadir:
