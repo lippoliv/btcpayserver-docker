@@ -18,11 +18,16 @@ services:
       BTCPAY_SSHKEYFILE: ${BTCPAY_SSHKEYFILE}
       BTCPAY_DEBUGLOG: btcpay.log
     links:
-      - nginx_net
       - postgres
+    networks:
+      - nginx_net
     volumes:
      - "btcpay_datadir:/datadir"
      - "nbxplorer_datadir:/root/.nbxplorer"
 
 volumes:
     btcpay_datadir:
+
+networks:
+  nginx_net:
+    external: true
