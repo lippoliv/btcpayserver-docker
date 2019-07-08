@@ -17,7 +17,7 @@ services:
         - "43782"
         - "39388"
       volumes:
-        - "bitcoin_datadir:/data"
+        - "./bitcoin_datadir:/data"
       networks:
         - btcpay
   nbxplorer:
@@ -26,10 +26,9 @@ services:
         NBXPLORER_BTCRPCURL: http://bitcoind:43782/
         NBXPLORER_BTCNODEENDPOINT: bitcoind:39388
       volumes:
-        - "bitcoin_datadir:/root/.bitcoin"
+        - "./bitcoin_datadir:/root/.bitcoin"
   btcpayserver:
       environment:
         BTCPAY_CHAINS: "btc"
         BTCPAY_BTCEXPLORERURL: http://nbxplorer:32838/
-volumes:
-  bitcoin_datadir:
+
