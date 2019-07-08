@@ -21,6 +21,7 @@ services:
       - postgres
     networks:
       - nginx_net
+      - btcpay
     volumes:
      - "btcpay_datadir:/datadir"
      - "nbxplorer_datadir:/root/.nbxplorer"
@@ -29,5 +30,6 @@ volumes:
     btcpay_datadir:
 
 networks:
+  btcpay:
   nginx_net:
     external: true
