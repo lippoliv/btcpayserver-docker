@@ -23,11 +23,8 @@ services:
       - nginx_net
       - btcpay
     volumes:
-     - "btcpay_datadir:/datadir"
-     - "nbxplorer_datadir:/root/.nbxplorer"
-
-volumes:
-    btcpay_datadir:
+     - "./btcpay_datadir:/datadir"
+     - "./nbxplorer_datadir:/root/.nbxplorer"
 
 networks:
   btcpay:
