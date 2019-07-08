@@ -18,6 +18,7 @@ services:
       BTCPAY_SSHKEYFILE: ${BTCPAY_SSHKEYFILE}
       BTCPAY_DEBUGLOG: btcpay.log
     links:
+      - nginx_net
       - postgres
     volumes:
      - "btcpay_datadir:/datadir"
