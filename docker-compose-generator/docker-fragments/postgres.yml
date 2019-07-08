@@ -5,9 +5,6 @@ services:
     restart: unless-stopped
     image:  postgres:9.6.5
     volumes:
-      - "postgres_datadir:/var/lib/postgresql/data"
+      - "./postgres_datadir:/var/lib/postgresql/data"
     networks:
       - btcpay
-
-volumes:
-    postgres_datadir:
