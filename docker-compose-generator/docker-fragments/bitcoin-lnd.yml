@@ -7,10 +7,10 @@ services:
     restart: unless-stopped
     environment:
       LND_CHAIN: "btc"
-      LND_EXTERNALIP: ${BTCPAY_ANNOUNCEABLE_HOST}
+      LND_EXTERNALIP: "pay.lipperts-web.de"
       LND_PORT: 9735
-      LND_ALIAS: ${LIGHTNING_ALIAS}
-      LND_ENVIRONMENT: "${NBITCOIN_NETWORK:-regtest}"
+      LND_ALIAS: "LWLN01"
+      LND_ENVIRONMENT: "mainnet"
       LND_READY_FILE: /root/.nbxplorer/btc_fully_synched
       LND_EXTRA_ARGS: |
         restlisten=0.0.0.0:8080
