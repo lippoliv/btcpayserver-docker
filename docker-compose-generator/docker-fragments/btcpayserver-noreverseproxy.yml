@@ -3,4 +3,3 @@ version: "3"
 services:
   btcpayserver:
       ports:
-      - "80:49392"
