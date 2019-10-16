@@ -22,6 +22,7 @@ install_tooling() {
                 "*" "btcpay-restart.sh" "Command line for restarting all services related to BTCPay Server" \
                 "*" "btcpay-setup.sh" "Command line for restarting all services related to BTCPay Server" \
                 "*" "btcpay-up.sh" "Command line for starting all services related to BTCPay Server" \
+                "*" "btcpay-admin.sh" "Command line for some administrative operation in BTCPay Server" \
                 "*" "btcpay-update.sh" "Command line for updating your BTCPay Server to the latest commit of this repository" \
                 "*" "changedomain.sh" "Command line for changing the external domain of your BTCPay Server" \
             )
@@ -67,6 +68,15 @@ btcpay_expand_variables() {
 btcpay_update_docker_env() {
 btcpay_expand_variables
 touch $BTCPAY_ENV_FILE
+
+# In a previous release, BTCPAY_HOST_SSHAUTHORIZEDKEYS was not saved into the .env, so the next update after setup
+# with BTCPAY_ENABLE_SSH set, BTCPAY_HOST_SSHAUTHORIZEDKEYS would get empty and break the SSH feature in btcpayserver
+# This condition detect this situation, and fix up BTCPAY_HOST_SSHAUTHORIZEDKEYS
+if [[ "$BTCPAY_ENABLE_SSH" == "true" ]] && ! [[ "$BTCPAY_HOST_SSHAUTHORIZEDKEYS" ]]; then
+    BTCPAY_HOST_SSHAUTHORIZEDKEYS=~/.ssh/authorized_keys
+    BTCPAY_HOST_SSHKEYFILE=""
+fi
+
 echo "
 BTCPAY_PROTOCOL=$BTCPAY_PROTOCOL
 BTCPAY_HOST=$BTCPAY_HOST
@@ -82,10 +92,14 @@ LETSENCRYPT_EMAIL=$LETSENCRYPT_EMAIL
 LIGHTNING_ALIAS=$LIGHTNING_ALIAS
 BTCPAY_SSHTRUSTEDFINGERPRINTS=$BTCPAY_SSHTRUSTEDFINGERPRINTS
 BTCPAY_SSHKEYFILE=$BTCPAY_SSHKEYFILE
+BTCPAY_SSHAUTHORIZEDKEYS=$BTCPAY_SSHAUTHORIZEDKEYS
+BTCPAY_HOST_SSHAUTHORIZEDKEYS=$BTCPAY_HOST_SSHAUTHORIZEDKEYS
 LIBREPATRON_HOST=$LIBREPATRON_HOST
 BTCTRANSMUTER_HOST=$BTCTRANSMUTER_HOST
 BTCPAY_CRYPTOS=$BTCPAY_CRYPTOS
-WOOCOMMERCE_HOST=$WOOCOMMERCE_HOST" > $BTCPAY_ENV_FILE
+WOOCOMMERCE_HOST=$WOOCOMMERCE_HOST
+TOR_RELAY_NICKNAME=$TOR_RELAY_NICKNAME
+TOR_RELAY_EMAIL=$TOR_RELAY_EMAIL" > $BTCPAY_ENV_FILE
 }
 
 btcpay_up() {
