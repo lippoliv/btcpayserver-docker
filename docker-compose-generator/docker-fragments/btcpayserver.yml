@@ -10,7 +10,7 @@ services:
     environment:
       # BTCPay settings
       BTCPAY_POSTGRES: User ID=postgres;Host=postgres;Port=5432;Database=btcpayserver${NBITCOIN_NETWORK:-regtest}
-      BTCPAY_NETWORK: ${NBITCOIN_NETWORK:-regtest}
+      BTCPAY_NETWORK: mainnet
       BTCPAY_BIND: 0.0.0.0:49392
       BTCPAY_ROOTPATH: ${BTCPAY_ROOTPATH:-/}
       BTCPAY_SSHCONNECTION: "root@host.docker.internal"
@@ -20,10 +20,14 @@ services:
       BTCPAY_DEBUGLOG: btcpay.log
     links:
       - postgres
+    networks:
+      - nginx_net
+      - btcpay
     volumes:
-     - "btcpay_datadir:/datadir"
-     - "nbxplorer_datadir:/root/.nbxplorer"
-     - "$<BTCPAY_HOST_SSHAUTHORIZEDKEYS>?:${BTCPAY_SSHAUTHORIZEDKEYS}"
+     - "./btcpay_datadir:/datadir"
+     - "./nbxplorer_datadir:/root/.nbxplorer"
 
-volumes:
-    btcpay_datadir:
+networks:
+  btcpay:
+  nginx_net:
+    external: true

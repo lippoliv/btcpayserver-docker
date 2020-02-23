@@ -8,11 +8,10 @@ services:
     expose: 
       - "32838"
     environment:
-      NBXPLORER_NETWORK: ${NBITCOIN_NETWORK:-regtest}
+      NBXPLORER_NETWORK: mainnet
       NBXPLORER_BIND: 0.0.0.0:32838
       NBXPLORER_SIGNALFILESDIR: /datadir
     volumes:
-      - "nbxplorer_datadir:/datadir"
-
-volumes:
-    nbxplorer_datadir:
+      - "./nbxplorer_datadir:/datadir"
+    networks:
+      - btcpay

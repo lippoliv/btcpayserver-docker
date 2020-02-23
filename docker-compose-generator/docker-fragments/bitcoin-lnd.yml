@@ -7,10 +7,10 @@ services:
     restart: unless-stopped
     environment:
       LND_CHAIN: "btc"
-      LND_EXTERNALIP: ${BTCPAY_ANNOUNCEABLE_HOST}
+      LND_EXTERNALIP: "pay.lipperts-web.de"
       LND_PORT: 9735
-      LND_ALIAS: ${LIGHTNING_ALIAS}
-      LND_ENVIRONMENT: "${NBITCOIN_NETWORK:-regtest}"
+      LND_ALIAS: "LWLN01"
+      LND_ENVIRONMENT: "mainnet"
       LND_READY_FILE: /root/.nbxplorer/btc_fully_synched
       LND_EXTRA_ARGS: |
         restlisten=0.0.0.0:8080
@@ -33,11 +33,13 @@ services:
       - "8080"
       - "9735"
     volumes:
-      - "lnd_bitcoin_datadir:/data"
-      - "bitcoin_datadir:/deps/.bitcoin"
-      - "nbxplorer_datadir:/root/.nbxplorer"
+      - "./lnd_bitcoin_datadir:/data"
+      - "./bitcoin_datadir:/deps/.bitcoin"
+      - "./nbxplorer_datadir:/root/.nbxplorer"
     links:
       - bitcoind
+    networks:
+      - btcpay
 
   lnd_bitcoin_rtl:
     image: shahanafarooqui/rtl:0.5.1
@@ -52,11 +54,14 @@ services:
       RTL_COOKIE_PATH: /data/.cookie
       LOGOUT_REDIRECT_LINK: /server/services
     volumes:
-      - "bitcoin_datadir:/etc/bitcoin"
-      - "lnd_bitcoin_datadir:/etc/lnd"
-      - "lnd_bitcoin_rtl_datadir:/data"
+      - "./bitcoin_datadir:/etc/bitcoin"
+      - "./lnd_bitcoin_datadir:/etc/lnd"
+      - "./lnd_bitcoin_rtl_datadir:/data"
     expose:
       - "3000"
+    networks:
+      - nginx_net
+      - btcpay
 
   btcpayserver:
     environment:
@@ -65,8 +70,8 @@ services:
       BTCPAY_BTCEXTERNALLNDGRPC: "server=/;macaroonfilepath=/etc/lnd_bitcoin/admin.macaroon;macaroondirectorypath=/etc/lnd_bitcoin"
       BTCPAY_BTCEXTERNALLNDREST: "server=/lnd-rest/btc/;macaroonfilepath=/etc/lnd_bitcoin/admin.macaroon;macaroondirectorypath=/etc/lnd_bitcoin"
     volumes:
-      - "lnd_bitcoin_datadir:/etc/lnd_bitcoin"
-      - "lnd_bitcoin_rtl_datadir:/etc/lnd_bitcoin_rtl"
+      - "./lnd_bitcoin_datadir:/etc/lnd_bitcoin"
+      - "./lnd_bitcoin_rtl_datadir:/etc/lnd_bitcoin_rtl"
     links:
       - lnd_bitcoin
 
@@ -88,13 +93,9 @@ services:
     links:
       - "lnd_bitcoin"
     volumes:
-      - "lnd_bitcoin_datadir:/lnd"
+      - "./lnd_bitcoin_datadir:/lnd"
   nginx-gen:
     links:
       - "lnd_bitcoin"
     volumes:
-      - "lnd_bitcoin_datadir:/lnd"
-
-volumes:
-  lnd_bitcoin_datadir:
-  lnd_bitcoin_rtl_datadir:
+      - "./lnd_bitcoin_datadir:/lnd"
