@@ -2,7 +2,7 @@ version: "3"
 
 services:
   lnd_bitcoin:
-    image: btcpayserver/lnd:v0.7.0-beta
+    image: btcpayserver/lnd:v0.7.1-beta
     container_name: btcpayserver_lnd_bitcoin
     restart: unless-stopped
     environment:
@@ -42,7 +42,7 @@ services:
       - btcpay
 
   lnd_bitcoin_rtl:
-    image: shahanafarooqui/rtl:0.3.2
+    image: shahanafarooqui/rtl:0.5.1
     restart: unless-stopped
     environment:
       LND_SERVER_URL: http://lnd_bitcoin:8080/v1

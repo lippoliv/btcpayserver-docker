@@ -40,7 +40,7 @@ namespace DockerFileBuildHelper
             foreach (var image in new[]
             {
                 Image.Parse("btcpayserver/docker-compose-generator"),
-                Image.Parse("btcpayserver/docker-compose-builder:1.23.2"),
+                Image.Parse("btcpayserver/docker-compose-builder:1.24.1"),
             }.Concat(GetImages(fragmentDirectory)))
             {
                 Console.WriteLine($"Image: {image.ToString()}");
@@ -142,8 +142,8 @@ namespace DockerFileBuildHelper
 
                 StringBuilder tb = new StringBuilder();
                 tb.Append(readme.Substring(0, start));
-                tb.AppendLine("| Source | Image | Version | x64 | arm32v7 | links |");
-                tb.AppendLine("|---|---|---|:-:|:-:|:-:|");
+                tb.AppendLine("| Source | Image | Version | x64 | arm32v7 | arm64v8 | links |");
+                tb.AppendLine("|---|---|---|:-:|:-:|:-:|:-:|");
                 dockerInfos = dockerInfos.OrderBy(i => i.Image.Source).ToList();
 
                 // Make sure bitcoin appears before shitcoin
@@ -171,6 +171,14 @@ namespace DockerFileBuildHelper
                     if (!string.IsNullOrEmpty(image.DockerFilePathARM32v7))
                     {
                         tb.Append($" [✔️]({image.GetGithubLinkOf(image.DockerFilePathARM32v7)}) |");
+                    }
+                    else
+                    {
+                        tb.Append($" ️❌ |");
+                    }
+                    if (!string.IsNullOrEmpty(image.DockerFilePathARM64v8))
+                    {
+                        tb.Append($" [✔️]({image.GetGithubLinkOf(image.DockerFilePathARM64v8)}) |");
                     }
                     else
                     {
@@ -251,6 +259,7 @@ namespace DockerFileBuildHelper
                 case "docker-compose-generator":
                     dockerInfo.DockerFilePath = "docker-compose-generator/linuxamd64.Dockerfile";
                     dockerInfo.DockerFilePathARM32v7 = "docker-compose-generator/linuxarm32v7.Dockerfile";
+                    dockerInfo.DockerFilePathARM64v8 = "docker-compose-generator/linuxarm64v8.Dockerfile";
                     dockerInfo.GitLink = "https://github.com/btcpayserver/btcpayserver-docker";
                     dockerInfo.GitRef = $"dcg-latest";
                     break;
@@ -262,6 +271,7 @@ namespace DockerFileBuildHelper
                 case "lightning":
                     dockerInfo.DockerFilePath = $"Dockerfile";
                     dockerInfo.DockerFilePathARM32v7 = "contrib/linuxarm32v7.Dockerfile";
+                    dockerInfo.DockerFilePathARM64v8 = "contrib/linuxarm64v8.Dockerfile";
                     dockerInfo.GitLink = "https://github.com/btcpayserver/lightning";
                     dockerInfo.GitRef = $"basedon-{image.Tag}";
                     break;
@@ -318,8 +328,14 @@ namespace DockerFileBuildHelper
                 case "lnd":
                     dockerInfo.DockerFilePath = "linuxamd64.Dockerfile";
                     dockerInfo.DockerFilePathARM32v7 = "linuxarm32v7.Dockerfile";
+                    dockerInfo.DockerFilePathARM64v8 = "linuxarm64v8.Dockerfile";
                     dockerInfo.GitLink = "https://github.com/btcpayserver/lnd";
                     dockerInfo.GitRef = $"basedon-{image.Tag}";
+                    break;
+                case "monero":
+                    dockerInfo.DockerFilePath = "Dockerfile";
+                    dockerInfo.GitLink = "https://github.com/Kukks/monero-docker";
+                    dockerInfo.GitRef = $"x86_64";
                     break;
                 case "bitcoin":
                     dockerInfo.DockerFilePath = $"Bitcoin/{image.Tag}/linuxamd64.Dockerfile";
@@ -331,6 +347,7 @@ namespace DockerFileBuildHelper
                 case "tor":
                     dockerInfo.DockerFilePath = $"Tor/{image.Tag}/linuxamd64.Dockerfile";
                     dockerInfo.DockerFilePathARM32v7 = $"Tor/{image.Tag}/linuxarm32v7.Dockerfile";
+                    dockerInfo.DockerFilePathARM64v8 = $"Tor/{image.Tag}/linuxarm64v8.Dockerfile";
                     dockerInfo.GitLink = "https://github.com/btcpayserver/dockerfile-deps";
                     dockerInfo.GitRef = $"Tor/{image.Tag}";
                     break;
@@ -350,12 +367,14 @@ namespace DockerFileBuildHelper
                 case "rtl":
                     dockerInfo.DockerFilePath = "Dockerfile";
                     dockerInfo.DockerFilePathARM32v7 = "Dockerfile.arm32v7";
+                    dockerInfo.DockerFilePathARM64v8 = "Dockerfile.arm64v8";
                     dockerInfo.GitLink = "https://github.com/ShahanaFarooqui/RTL";
                     dockerInfo.GitRef = $"v{image.Tag}";
                     break;
                 case "nbxplorer":
                     dockerInfo.DockerFilePath = "Dockerfile.linuxamd64";
                     dockerInfo.DockerFilePathARM32v7 = "Dockerfile.linuxarm32v7";
+                    dockerInfo.DockerFilePathARM64v8 = "Dockerfile.linuxarm64v8";
                     dockerInfo.GitLink = "https://github.com/dgarage/nbxplorer";
                     dockerInfo.GitRef = $"v{image.Tag}";
                     break;
@@ -404,6 +423,7 @@ namespace DockerFileBuildHelper
                 case "nginx":
                     dockerInfo.DockerFilePath = $"stable/stretch/Dockerfile";
                     dockerInfo.DockerFilePathARM32v7 = $"stable/stretch/Dockerfile";
+                    dockerInfo.DockerFilePathARM64v8 = $"stable/stretch/Dockerfile";
                     dockerInfo.GitLink = "https://github.com/nginxinc/docker-nginx";
                     dockerInfo.GitRef = image.Tag;
                     break;
@@ -417,6 +437,7 @@ namespace DockerFileBuildHelper
                 case "letsencrypt-nginx-proxy-companion":
                     dockerInfo.DockerFilePath = $"linuxamd64.Dockerfile";
                     dockerInfo.DockerFilePathARM32v7 = $"linuxarm32v7.Dockerfile";
+                    dockerInfo.DockerFilePathARM64v8 = $"linuxarm64v8.Dockerfile";
                     dockerInfo.GitLink = "https://github.com/btcpayserver/docker-letsencrypt-nginx-proxy-companion";
                     dockerInfo.GitRef = $"v{image.Tag}";
                     break;
@@ -433,12 +454,12 @@ namespace DockerFileBuildHelper
                 case "postgres":
                     dockerInfo.DockerFilePath = $"9.6/Dockerfile";
                     dockerInfo.DockerFilePathARM32v7 = $"9.6/Dockerfile";
+                    dockerInfo.DockerFilePathARM64v8 = $"9.6/Dockerfile";
                     dockerInfo.GitLink = "https://github.com/docker-library/postgres";
                     dockerInfo.GitRef = $"b7cb3c6eacea93be2259381033be3cc435649369";
                     break;
                 case "traefik":
-                    dockerInfo.DockerFilePath = $"scratch/amd64/Dockerfile";
-                    dockerInfo.DockerFilePathARM32v7 = $"scratch/arm/Dockerfile";
+                    dockerInfo.DockerFilePath = $"scratch/Dockerfile";
                     dockerInfo.GitLink = "https://github.com/containous/traefik-library-image";
                     dockerInfo.GitRef = $"master";
                     break;

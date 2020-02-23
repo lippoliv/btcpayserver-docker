@@ -8,24 +8,24 @@ if [[ "$0" = "$BASH_SOURCE" ]]; then
 fi
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
-	# Mac OS
+    # Mac OS
 
-	if [[ $EUID -eq 0 ]]; then
-		# Running as root is discouraged on Mac OS. Run under the current user instead.
+    if [[ $EUID -eq 0 ]]; then
+        # Running as root is discouraged on Mac OS. Run under the current user instead.
         echo "This script should not be run as root."
         return
     fi
 
-	BASH_PROFILE_SCRIPT="$HOME/btcpay-env.sh"
+    BASH_PROFILE_SCRIPT="$HOME/btcpay-env.sh"
 
-	# Mac OS doesn't use /etc/profile.d/xxx.sh. Instead we create a new file and load that from ~/.bash_profile
-	if [[ ! -f "$HOME/.bash_profile" ]]; then
-		touch "$HOME/.bash_profile"
+    # Mac OS doesn't use /etc/profile.d/xxx.sh. Instead we create a new file and load that from ~/.bash_profile
+    if [[ ! -f "$HOME/.bash_profile" ]]; then
+        touch "$HOME/.bash_profile"
     fi
-	if [[ -z $(grep ". \"$BASH_PROFILE_SCRIPT\"" "$HOME/.bash_profile") ]]; then
-		# Line does not exist, add it
-		echo ". \"$BASH_PROFILE_SCRIPT\"" >> "$HOME/.bash_profile"
-	fi
+    if [[ -z $(grep ". \"$BASH_PROFILE_SCRIPT\"" "$HOME/.bash_profile") ]]; then
+        # Line does not exist, add it
+        echo ". \"$BASH_PROFILE_SCRIPT\"" >> "$HOME/.bash_profile"
+    fi
 
 else
     # Root user is not needed for Mac OS
@@ -61,6 +61,7 @@ This script must be run as root, except on Mac OS
     --install-only: Run install only
     --docker-unavailable: Same as --install-only, but will also skip install steps requiring docker
     --no-startup-register: Do not register BTCPayServer to start via systemctl or upstart
+    --no-systemd-reload: Do not reload systemd configuration
 
 This script will:
 
@@ -93,7 +94,7 @@ Environment variables:
     BTCPAYGEN_LIGHTNING: Lightning network implementation to use (eg. clightning, lnd, none)
     BTCPAYGEN_ADDITIONAL_FRAGMENTS: Semi colon separated list of additional fragments you want to use (eg. opt-save-storage)
     ACME_CA_URI: The API endpoint to ask for HTTPS certificate (default: https://acme-v01.api.letsencrypt.org/directory)
-    BTCPAY_HOST_SSHKEYFILE: Optional, SSH private key that BTCPay can use to connect to this VM's SSH server. This key will be copied on BTCPay's data directory
+    BTCPAY_ENABLE_SSH: Optional, gives BTCPay Server SSH access to the host by allowing it to edit authorized_keys of the host, it can be used for managing the authorized_keys or updating BTCPay Server directly through the website. (Default: false)
     BTCPAYGEN_DOCKER_IMAGE: Allows you to specify a custom docker image for the generator (Default: btcpayserver/docker-compose-generator)
     BTCPAY_IMAGE: Allows you to specify the btcpayserver docker image to use over the default version. (Default: current stable version of btcpayserver)
     BTCPAY_PROTOCOL: Allows you to specify the external transport protocol of BTCPayServer. (Default: https)
@@ -103,11 +104,14 @@ Add-on specific variables:
     WOOCOMMERCE_HOST: If woocommerce is activated with opt-add-woocommerce, the hostname of your woocommerce website (eg. store.example.com)
     BTCPAYGEN_EXCLUDE_FRAGMENTS:  Semicolon-separated list of fragments you want to forcefully exclude (eg. litecoin-clightning)
     BTCTRANSMUTER_HOST: If btc transmuter is activated with opt-add-btctransmuter, the hostname of your btc transmuter website (eg. store.example.com)
+    TOR_RELAY_NICKNAME: If tor relay is activated with opt-add-tor-relay, the relay nickname
+    TOR_RELAY_EMAIL: If tor relay is activated with opt-add-tor-relay, the email for Tor to contact you regarding your relay
 END
 }
 START=""
 HAS_DOCKER=true
 STARTUP_REGISTER=true
+SYSTEMD_RELOAD=true
 while (( "$#" )); do
   case "$1" in
     -i)
@@ -125,6 +129,10 @@ while (( "$#" )); do
       ;;
     --no-startup-register)
       STARTUP_REGISTER=false
+      shift 1
+      ;;
+    --no-systemd-reload)
+      SYSTEMD_RELOAD=false
       shift 1
       ;;
     --) # end argument parsing
@@ -150,19 +158,24 @@ if ! [[ "$START" ]]; then
 fi
 
 if [[ -z "$BTCPAYGEN_CRYPTO1" ]]; then
-	if [[ "$OSTYPE" != "darwin"* ]]; then
-		# Not Mac OS - Mac OS uses it's own env file
-    	if [[ -f "$BASH_PROFILE_SCRIPT" ]]; then
-        	echo "This script must be run as root after running \"sudo su -\""
-    	else
-        	echo "BTCPAYGEN_CRYPTO1 should not be empty"
-    	fi
-    	return
+    if [[ "$OSTYPE" != "darwin"* ]]; then
+        # Not Mac OS - Mac OS uses it's own env file
+        if [[ -f "$BASH_PROFILE_SCRIPT" ]]; then
+            echo "This script must be run as root after running \"sudo su -\""
+        else
+            echo "BTCPAYGEN_CRYPTO1 should not be empty"
+        fi
+        return
     fi
 fi
 
 if [ ! -z "$BTCPAY_ADDITIONAL_HOSTS" ] && [[ "$BTCPAY_ADDITIONAL_HOSTS" == *[';']* ]]; then 
     echo "$BTCPAY_ADDITIONAL_HOSTS should be separated by a , not ;"
+    return;
+fi
+
+if [ ! -z "$BTCPAY_ADDITIONAL_HOSTS" ] && [[ "$BTCPAY_ADDITIONAL_HOSTS" == .onion* ]]; then 
+    echo "$BTCPAY_ADDITIONAL_HOSTS should not contains onion hosts, additional hosts is only for getting https certificates, those are not available to tor addresses"
     return;
 fi
 ######### Migration: old pregen environment to new environment ############
@@ -186,6 +199,7 @@ fi
 : "${BTCPAY_ADDITIONAL_HOSTS:=}"
 : "${REVERSEPROXY_HTTP_PORT:=80}"
 : "${REVERSEPROXY_HTTPS_PORT:=443}"
+: "${BTCPAY_ENABLE_SSH:=false}"
 
 OLD_BTCPAY_DOCKER_COMPOSE="$BTCPAY_DOCKER_COMPOSE"
 ORIGINAL_DIRECTORY="$(pwd)"
@@ -207,13 +221,31 @@ BTCPAY_ENV_FILE="$BTCPAY_BASE_DIRECTORY/.env"
 
 BTCPAY_SSHKEYFILE=""
 BTCPAY_SSHTRUSTEDFINGERPRINTS=""
-if [[ -f "$BTCPAY_HOST_SSHKEYFILE" ]]; then
-    BTCPAY_SSHKEYFILE="/datadir/id_rsa"
-    for pubkey in /etc/ssh/ssh_host_*.pub; do
-        fingerprint="$(ssh-keygen -l -f $pubkey | awk '{print $2}')"
-        BTCPAY_SSHTRUSTEDFINGERPRINTS="$fingerprint;$BTCPAY_SSHTRUSTEDFINGERPRINTS"
-    done
+use_ssh=false
+
+if $BTCPAY_ENABLE_SSH && ! [[ "$BTCPAY_HOST_SSHAUTHORIZEDKEYS" ]]; then
+    BTCPAY_HOST_SSHAUTHORIZEDKEYS=~/.ssh/authorized_keys
+    BTCPAY_HOST_SSHKEYFILE=""
 fi
+
+if [[ -f "$BTCPAY_HOST_SSHKEYFILE" ]]; then
+    echo -e "\033[33mWARNING: BTCPAY_HOST_SSHKEYFILE is now deprecated, use instead BTCPAY_ENABLE_SSH=true and run again '. btcpay-setup.sh -i'\033[0m"
+    BTCPAY_SSHKEYFILE="/datadir/id_rsa"
+    use_ssh=true
+fi
+
+if $BTCPAY_ENABLE_SSH && [[ "$BTCPAY_HOST_SSHAUTHORIZEDKEYS" ]]; then
+    if ! [[ -f "$BTCPAY_HOST_SSHAUTHORIZEDKEYS" ]]; then
+        mkdir -p "$(dirname $BTCPAY_HOST_SSHAUTHORIZEDKEYS)"
+        touch $BTCPAY_HOST_SSHAUTHORIZEDKEYS
+    fi
+    BTCPAY_SSHAUTHORIZEDKEYS="/datadir/host_authorized_keys"
+    BTCPAY_SSHKEYFILE="/datadir/host_id_rsa"
+    use_ssh=true
+fi
+
+# Do not set BTCPAY_SSHTRUSTEDFINGERPRINTS in the setup, since we connect from inside the docker container to the host, this is fine
+BTCPAY_SSHTRUSTEDFINGERPRINTS=""
 
 if [[ "$BTCPAYGEN_REVERSEPROXY" == "nginx" ]] && [[ "$BTCPAY_HOST" ]]; then
     DOMAIN_NAME="$(echo "$BTCPAY_HOST" | grep -E '^([a-z0-9]+(-[a-z0-9]+)*\.)+[a-z]{2,}$')"
@@ -222,6 +254,15 @@ if [[ "$BTCPAYGEN_REVERSEPROXY" == "nginx" ]] && [[ "$BTCPAY_HOST" ]]; then
         return
     fi
     BTCPAY_HOST="$DOMAIN_NAME"
+fi
+
+# Since opt-txindex requires unpruned node, throw an error if both
+# opt-txindex and opt-save-storage-* are enabled together
+if [[ "${BTCPAYGEN_ADDITIONAL_FRAGMENTS}" == *opt-txindex* ]] && \
+   [[ "${BTCPAYGEN_ADDITIONAL_FRAGMENTS}" == *opt-save-storage* ]];then
+        echo "Error: BTCPAYGEN_ADDITIONAL_FRAGMENTS contains both opt-txindex and opt-save-storage*"
+        echo "opt-txindex requires an unpruned node, so you cannot use opt-save-storage with it"
+        return
 fi
 
 cd "$BTCPAY_BASE_DIRECTORY/btcpayserver-docker"
@@ -242,6 +283,7 @@ REVERSEPROXY_DEFAULT_HOST:$REVERSEPROXY_DEFAULT_HOST
 LIBREPATRON_HOST:$LIBREPATRON_HOST
 WOOCOMMERCE_HOST:$WOOCOMMERCE_HOST
 BTCTRANSMUTER_HOST:$BTCTRANSMUTER_HOST
+BTCPAY_ENABLE_SSH:$BTCPAY_ENABLE_SSH
 BTCPAY_HOST_SSHKEYFILE:$BTCPAY_HOST_SSHKEYFILE
 LETSENCRYPT_EMAIL:$LETSENCRYPT_EMAIL
 NBITCOIN_NETWORK:$NBITCOIN_NETWORK
@@ -261,6 +303,8 @@ BTCPAYGEN_ADDITIONAL_FRAGMENTS:$BTCPAYGEN_ADDITIONAL_FRAGMENTS
 BTCPAYGEN_EXCLUDE_FRAGMENTS:$BTCPAYGEN_EXCLUDE_FRAGMENTS
 BTCPAY_IMAGE:$BTCPAY_IMAGE
 ACME_CA_URI:$ACME_CA_URI
+TOR_RELAY_NICKNAME: $TOR_RELAY_NICKNAME
+TOR_RELAY_EMAIL: $TOR_RELAY_EMAIL
 ----------------------
 Additional exported variables:
 BTCPAY_DOCKER_COMPOSE=$BTCPAY_DOCKER_COMPOSE
@@ -268,6 +312,8 @@ BTCPAY_BASE_DIRECTORY=$BTCPAY_BASE_DIRECTORY
 BTCPAY_ENV_FILE=$BTCPAY_ENV_FILE
 BTCPAYGEN_OLD_PREGEN=$BTCPAYGEN_OLD_PREGEN
 BTCPAY_SSHKEYFILE=$BTCPAY_SSHKEYFILE
+BTCPAY_SSHAUTHORIZEDKEYS=$BTCPAY_SSHAUTHORIZEDKEYS
+BTCPAY_HOST_SSHAUTHORIZEDKEYS:$BTCPAY_HOST_SSHAUTHORIZEDKEYS
 BTCPAY_SSHTRUSTEDFINGERPRINTS:$BTCPAY_SSHTRUSTEDFINGERPRINTS
 BTCPAY_CRYPTOS:$BTCPAY_CRYPTOS
 BTCPAY_ANNOUNCEABLE_HOST:$BTCPAY_ANNOUNCEABLE_HOST
@@ -308,6 +354,7 @@ export BTCPAY_DOCKER_COMPOSE=\"$BTCPAY_DOCKER_COMPOSE\"
 export BTCPAY_BASE_DIRECTORY=\"$BTCPAY_BASE_DIRECTORY\"
 export BTCPAY_ENV_FILE=\"$BTCPAY_ENV_FILE\"
 export BTCPAY_HOST_SSHKEYFILE=\"$BTCPAY_HOST_SSHKEYFILE\"
+export BTCPAY_ENABLE_SSH=$BTCPAY_ENABLE_SSH
 if cat \"\$BTCPAY_ENV_FILE\" &> /dev/null; then
   while IFS= read -r line; do
     ! [[ \"\$line\" == \"#\"* ]] && [[ \"\$line\" == *\"=\"* ]] && export \"\$line\"
@@ -338,28 +385,28 @@ if ! [[ -x "$(command -v docker)" ]] || ! [[ -x "$(command -v docker-compose)" ]
     fi
     if ! [[ -x "$(command -v docker)" ]]; then
         if [[ "$(uname -m)" == "x86_64" ]] || [[ "$(uname -m)" == "armv7l" ]]; then
-        	if [[ "$OSTYPE" == "darwin"* ]]; then
-        		# Mac OS	
-        		if ! [[ -x "$(command -v brew)" ]]; then
-        			# Brew is not installed, install it now
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                # Mac OS	
+                if ! [[ -x "$(command -v brew)" ]]; then
+                    # Brew is not installed, install it now
                     echo "Homebrew, the package manager for Mac OS, is not installed. Installing it now..."
-        			/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-        		fi
-        		if [[ -x "$(command -v brew)" ]]; then
+                    /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+                fi
+                if [[ -x "$(command -v brew)" ]]; then
                     echo "Homebrew is installed, but Docker isn't. Installing it now using brew..."
-        			# Brew is installed, install docker now
+                    # Brew is installed, install docker now
                     # This sequence is a bit strange, but it's what what needed to get it working on a fresh Mac OS X Mojave install
-        			brew cask install docker
-        			brew install docker
-        			brew link docker
-        		fi
-        	else
-        		# Not Mac OS
-				echo "Trying to install docker..."
-				curl -fsSL https://get.docker.com -o get-docker.sh
-				chmod +x get-docker.sh
-				sh get-docker.sh
-				rm get-docker.sh
+                    brew cask install docker
+                    brew install docker
+                    brew link docker
+                fi
+            else
+                # Not Mac OS
+                echo "Trying to install docker..."
+                curl -fsSL https://get.docker.com -o get-docker.sh
+                chmod +x get-docker.sh
+                sh get-docker.sh
+                rm get-docker.sh
             fi
         elif [[ "$(uname -m)" == "aarch64" ]]; then
             echo "Trying to install docker for armv7 on a aarch64 board..."
@@ -379,22 +426,15 @@ if ! [[ -x "$(command -v docker)" ]] || ! [[ -x "$(command -v docker-compose)" ]
     fi
 
     if ! [[ -x "$(command -v docker-compose)" ]]; then
-        if ! [[ "$OSTYPE" == "darwin"* ]]; then
-            if [[ "$(uname -m)" == "x86_64" ]]; then
-                DOCKER_COMPOSE_DOWNLOAD="https://github.com/docker/compose/releases/download/1.23.2/docker-compose-`uname -s`-`uname -m`"
-                echo "Trying to install docker-compose by downloading on $DOCKER_COMPOSE_DOWNLOAD ($(uname -m))"
-                curl -L "$DOCKER_COMPOSE_DOWNLOAD" -o /usr/local/bin/docker-compose
-                chmod +x /usr/local/bin/docker-compose
-            elif $HAS_DOCKER; then
-                echo "Trying to install docker-compose by using the docker-compose-builder ($(uname -m))"
-                ! [[ -d "dist" ]] && mkdir dist
-                docker run --rm -v "$(pwd)/dist:/dist" btcpayserver/docker-compose-builder:1.23.2
-                mv dist/docker-compose /usr/local/bin/docker-compose
-                chmod +x /usr/local/bin/docker-compose
-                rm -rf "dist"
-            fi
+        if ! [[ "$OSTYPE" == "darwin"* ]] && $HAS_DOCKER; then
+            echo "Trying to install docker-compose by using the docker-compose-builder ($(uname -m))"
+            ! [[ -d "dist" ]] && mkdir dist
+            docker run --rm -v "$(pwd)/dist:/dist" btcpayserver/docker-compose-builder:1.24.1
+            mv dist/docker-compose /usr/local/bin/docker-compose
+            chmod +x /usr/local/bin/docker-compose
+            rm -rf "dist"
         fi
-	fi
+    fi
 fi
 
 if $HAS_DOCKER; then
@@ -418,14 +458,14 @@ fi
 
 # Schedule for reboot
 if $STARTUP_REGISTER && [[ -x "$(command -v systemctl)" ]]; then
-	# Use systemd
-	if [[ -e "/etc/init/start_containers.conf" ]]; then
-		echo -e "Uninstalling upstart script /etc/init/start_containers.conf"
-		rm "/etc/init/start_containers.conf"
-		initctl reload-configuration
-	fi
-	echo "Adding btcpayserver.service to systemd"
-	echo "
+    # Use systemd
+    if [[ -e "/etc/init/start_containers.conf" ]]; then
+        echo -e "Uninstalling upstart script /etc/init/start_containers.conf"
+        rm "/etc/init/start_containers.conf"
+        initctl reload-configuration
+    fi
+    echo "Adding btcpayserver.service to systemd"
+    echo "
 [Unit]
 Description=BTCPayServer service
 After=docker.service network-online.target
@@ -442,27 +482,31 @@ ExecReload=/bin/bash -c '. \"$BASH_PROFILE_SCRIPT\" && cd \"\$BTCPAY_BASE_DIRECT
 [Install]
 WantedBy=multi-user.target" > /etc/systemd/system/btcpayserver.service
 
-	if ! [[ -f "/etc/docker/daemon.json" ]]; then
-		echo "{
+    if ! [[ -f "/etc/docker/daemon.json" ]] && [ -w "/etc/docker" ]; then
+        echo "{
 \"log-driver\": \"json-file\",
 \"log-opts\": {\"max-size\": \"5m\", \"max-file\": \"3\"}
 }" > /etc/docker/daemon.json
-		echo "Setting limited log files in /etc/docker/daemon.json"
-		$START && systemctl restart docker
-	fi
+        echo "Setting limited log files in /etc/docker/daemon.json"
+        $SYSTEMD_RELOAD && $START && systemctl restart docker
+    fi
 
-	echo -e "BTCPay Server systemd configured in /etc/systemd/system/btcpayserver.service\n"
-	systemctl daemon-reload
-	systemctl enable btcpayserver
-	if $START; then
-		echo "BTCPay Server starting... this can take 5 to 10 minutes..."
-		systemctl start btcpayserver
-		echo "BTCPay Server started"
-	fi
+    echo -e "BTCPay Server systemd configured in /etc/systemd/system/btcpayserver.service\n"
+    if $SYSTEMD_RELOAD; then
+        systemctl daemon-reload
+        systemctl enable btcpayserver
+        if $START; then
+            echo "BTCPay Server starting... this can take 5 to 10 minutes..."
+            systemctl start btcpayserver
+            echo "BTCPay Server started"
+        fi
+    else
+        systemctl --no-reload enable btcpayserver
+    fi
 elif $STARTUP_REGISTER && [[ -x "$(command -v initctl)" ]]; then
-	# Use upstart
-	echo "Using upstart"
-	echo "
+    # Use upstart
+    echo "Using upstart"
+    echo "
 # File is saved under /etc/init/start_containers.conf
 # After file is modified, update config with : $ initctl reload-configuration
 
@@ -482,10 +526,9 @@ script
 end script" > /etc/init/start_containers.conf
     echo -e "BTCPay Server upstart configured in /etc/init/start_containers.conf\n"
 
-	if $START; then
-		initctl reload-configuration
-		echo "BTCPay Server started"
-	fi
+    if $START; then
+        initctl reload-configuration
+    fi
 fi
 
 
@@ -503,7 +546,8 @@ elif $HAS_DOCKER; then
 fi
 
 # Give SSH key to BTCPay
-if [[ -f "$BTCPAY_HOST_SSHKEYFILE" ]]; then
+if $START && [[ -f "$BTCPAY_HOST_SSHKEYFILE" ]]; then
+    echo -e "\033[33mWARNING: BTCPAY_HOST_SSHKEYFILE is now deprecated, use instead BTCPAY_ENABLE_SSH=true and run again '. btcpay-setup.sh -i'\033[0m"
     echo "Copying $BTCPAY_SSHKEYFILE to BTCPayServer container"
     docker cp "$BTCPAY_HOST_SSHKEYFILE" $(docker ps --filter "name=_btcpayserver_" -q):$BTCPAY_SSHKEYFILE
 fi
