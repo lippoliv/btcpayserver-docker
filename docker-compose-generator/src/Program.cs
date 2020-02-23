@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using YamlDotNet.Serialization;
 
 namespace DockerGenerator
@@ -22,26 +23,33 @@ namespace DockerGenerator
 
 			var name = Environment.GetEnvironmentVariable("BTCPAYGEN_SUBNAME");
 			name = string.IsNullOrEmpty(name) ? "generated" : name;
-			new Program().Run(composition, name, generatedLocation);
+			try
+			{
+				new Program().Run(composition, name, generatedLocation);
+			}
+			catch (YamlBuildException ex)
+			{
+				ConsoleUtils.WriteLine(ex.Message, ConsoleColor.Red);
+				Environment.ExitCode = 1;
+			}
 		}
 
 		private void Run(DockerComposition composition, string name, string output)
 		{
-			var fragmentLocation = Environment.GetEnvironmentVariable("INSIDE_CONTAINER") == "1" ? "app" : "docker-compose-generator";
-			fragmentLocation = FindRoot(fragmentLocation);
-			fragmentLocation = Path.GetFullPath(Path.Combine(fragmentLocation, "docker-fragments"));
-
+			var root = Environment.GetEnvironmentVariable("INSIDE_CONTAINER") == "1" ? "app" : "docker-compose-generator";
+			 root = FindRoot(root);
+			var fragmentLocation = Path.GetFullPath(Path.Combine(root, "docker-fragments"));
+			var cryptoDefinitionsLocation = Path.GetFullPath(Path.Combine(root, "crypto-definitions.json"));
+			var cryptoDefinitions =
+				JsonSerializer.Deserialize<CryptoDefinition[]>(File.ReadAllText(cryptoDefinitionsLocation));
 			var fragments = new HashSet<string>();
 			switch (composition.SelectedProxy)
 			{
 				case "nginx":
-					fragments.Add("nginx-https");
 					fragments.Add("nginx");
-					fragments.Add("btcpayserver-nginx");
 					break;
 				case "traefik":
 					fragments.Add("traefik");
-					fragments.Add("traefik-labels");
 					break;
 				case "no-reverseproxy":
 				case "none":
@@ -50,10 +58,8 @@ namespace DockerGenerator
 					break;
 			}
 			fragments.Add("btcpayserver");
-			fragments.Add("opt-add-tor");
-			fragments.Add("nbxplorer");
-			fragments.Add("postgres");
-			foreach (var crypto in CryptoDefinition.GetDefinitions())
+			
+			foreach (var crypto in cryptoDefinitions)
 			{
 				if (!composition.SelectedCryptos.Contains(crypto.Crypto))
 					continue;
@@ -67,14 +73,20 @@ namespace DockerGenerator
 				{
 					fragments.Add(crypto.LNDFragment);
 				}
+				if (composition.SelectedLN == "eclair" && crypto.EclairFragment != null)
+				{
+					fragments.Add(crypto.EclairFragment);
+				}
 			}
 
 			foreach (var fragment in composition.AdditionalFragments)
 			{
-				fragments.Add(fragment.Trim());
+				fragments.Add(fragment);
 			}
-			fragments = fragments.Where(s => !composition.ExcludeFragments.Contains(s)).ToHashSet();
-			var def = new DockerComposeDefinition(name, fragments);
+			var def = new DockerComposeDefinition(name, fragments.Select(f => new FragmentName(f)).ToHashSet())
+			{
+				ExcludeFragments = composition.ExcludeFragments.Select(f => new FragmentName(f)).ToHashSet()
+			};
 			def.FragmentLocation = fragmentLocation;
 			def.BuildOutputDirectory = output;
 			def.Build();

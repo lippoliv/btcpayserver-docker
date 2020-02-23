@@ -9,12 +9,14 @@ then
 else
     set +e
     docker pull $BTCPAYGEN_DOCKER_IMAGE
+    docker rmi $(docker images btcpayserver/docker-compose-generator --format "{{.Tag}};{{.ID}}" | grep "^<none>" | cut -f2 -d ';') > /dev/null 2>&1
     set -e
 fi
 
 # This script will run docker-compose-generator in a container to generate the yml files
 docker run -v "$(pwd)/Generated:/app/Generated" \
            -v "$(pwd)/docker-compose-generator/docker-fragments:/app/docker-fragments" \
+           -v "$(pwd)/docker-compose-generator/crypto-definitions.json:/app/crypto-definitions.json" \
            -e "BTCPAY_HOST=pay.lipperts-web.de" \
            -e "LIGHTNING_ALIAS=LWLN01" \
            -e "BTCPAYGEN_CRYPTO1=btc" \
@@ -23,6 +25,7 @@ docker run -v "$(pwd)/Generated:/app/Generated" \
            -e "BTCPAYGEN_LIGHTNING=lnd" \
            -e "BTCPAYGEN_SUBNAME=" \
            -e "BTCPAYGEN_EXCLUDE_FRAGMENTS=opt-add-tor" \
+           -e "EPS_XPUB=$EPS_XPUB" \
            --rm $BTCPAYGEN_DOCKER_IMAGE
 
 if [ "$BTCPAYGEN_REVERSEPROXY" == "nginx" ]; then

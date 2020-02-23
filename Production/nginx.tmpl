@@ -34,9 +34,9 @@
 		proxy_pass http://lnd_bitcoin:8080/;
 	}
 		{{ end }}
-		{{ if (eq $serviceName "lnd_bitcoin_rtl") }}
+		{{ if (eq $serviceName "bitcoin_rtl") }}
 	location /rtl/ {
-		proxy_pass http://lnd_bitcoin_rtl:3000/rtl/;
+		proxy_pass http://bitcoin_rtl:3000/rtl/;
 	}
 		{{ end }}
 		{{ if (eq $serviceName "btcqbo") }}
@@ -57,6 +57,12 @@
 	location /lightning-charge/btc/ {
 		proxy_pass http://clightning_bitcoin_charge:9112/;
 	}
+	{{ end }}		
+	{{ if (eq $serviceName "clightning_bitcoin_rest") }}
+	location /clightning-rest/btc/ {
+	    rewrite ^/clightning-rest/btc/(.*) /$1 break;
+		proxy_pass http://clightning_bitcoin_rest:3001/;
+	}
 		{{ end }}
 		{{ if (eq $serviceName "clightning_groestlcoin_spark") }}
 	location /spark/grs/ {
@@ -66,6 +72,34 @@
 		{{ if (eq $serviceName "clightning_groestlcoin_charge") }}
 	location /lightning-charge/grs/ {
 		proxy_pass http://clightning_groestlcoin_charge:9112/;
+	}
+		{{ end }}
+		
+		{{ if (eq $serviceName "btctransmuter") }}
+	location /btctransmuter/ {
+		proxy_set_header Connection "";
+		proxy_set_header        Host               $host;
+        proxy_set_header        X-Real-IP          $remote_addr;
+        proxy_set_header        X-Forwarded-For    $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Host   $host:443;
+        proxy_set_header        X-Forwarded-Server $host;
+        proxy_set_header        X-Forwarded-Port   443;
+        proxy_set_header        X-Forwarded-Proto  https;
+		proxy_pass http://btctransmuter;
+	}
+		{{ end }}
+		
+		{{ if (eq $serviceName "configurator") }}
+	location /configurator/ {
+		proxy_set_header Connection "";
+		proxy_set_header        Host               $host;
+        proxy_set_header        X-Real-IP          $remote_addr;
+        proxy_set_header        X-Forwarded-For    $proxy_add_x_forwarded_for;
+        proxy_set_header        X-Forwarded-Host   $host:443;
+        proxy_set_header        X-Forwarded-Server $host;
+        proxy_set_header        X-Forwarded-Port   443;
+        proxy_set_header        X-Forwarded-Proto  https;
+		proxy_pass http://configurator;
 	}
 		{{ end }}
 	{{ end }}
@@ -272,15 +306,18 @@ server {
 {{/* Get the first cert name defined by containers w/ the same vhost */}}
 {{ $certName := (first (groupByKeys $containers "Env.CERT_NAME")) }}
 
-{{/* Get the best matching cert  by name for the vhost. */}}
-{{ $vhostCert := (closest (dir "/etc/nginx/certs") (printf "%s.crt" $host))}}
+{{ $cert := "" }}
+{{ if exists "/etc/nginx/certs" }}
+	{{/* Get the best matching cert  by name for the vhost. */}}
+	{{ $vhostCert := (closest (dir "/etc/nginx/certs") (printf "%s.crt" $host))}}
 
-{{/* vhostCert is actually a filename so remove any suffixes since they are added later */}}
-{{ $vhostCert := trimSuffix ".crt" $vhostCert }}
-{{ $vhostCert := trimSuffix ".key" $vhostCert }}
+	{{/* vhostCert is actually a filename so remove any suffixes since they are added later */}}
+	{{ $vhostCert := trimSuffix ".crt" $vhostCert }}
+	{{ $vhostCert := trimSuffix ".key" $vhostCert }}
 
-{{/* Use the cert specified on the container or fallback to the best vhost match */}}
-{{ $cert := (coalesce $certName $vhostCert) }}
+	{{/* Use the cert specified on the container or fallback to the best vhost match */}}
+	{{ $cert = (coalesce $certName $vhostCert) }}
+{{ end }}
 
 {{ $is_https := (and (ne $https_method "nohttps") (ne $cert "") (exists (printf "/etc/nginx/certs/%s.crt" $cert)) (exists (printf "/etc/nginx/certs/%s.key" $cert))) }}
 
