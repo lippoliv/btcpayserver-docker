@@ -14,14 +14,14 @@ services:
         port=39388
         whitelist=0.0.0.0/0
         maxmempool=500
-      expose:
-        - "43782"
-        - "39388"
-      volumes:
-        - "./bitcoin_wallet_datadir:/walletdata"
-        - "./bitcoin_datadir:/data"
-      networks:
-        - btcpay
+    expose:
+      - "43782"
+      - "39388"
+    volumes:
+      - "./bitcoin_wallet_datadir:/walletdata"
+      - "./bitcoin_datadir:/data"
+    networks:
+      - btcpay
   nbxplorer:
     environment:
       NBXPLORER_CHAINS: "btc"
