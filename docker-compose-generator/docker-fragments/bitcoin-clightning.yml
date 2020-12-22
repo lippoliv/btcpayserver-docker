@@ -2,7 +2,7 @@ version: "3"
 
 services:
   clightning_bitcoin:
-    image: btcpayserver/lightning:v0.8.0
+    image: btcpayserver/lightning:v0.9.1
     container_name: btcpayserver_clightning_bitcoin
     restart: unless-stopped
     environment:
@@ -24,7 +24,7 @@ services:
     links:
       - bitcoind
   clightning_bitcoin_charge:
-    image: shesek/lightning-charge:0.4.16-standalone
+    image: shesek/lightning-charge:0.4.19-standalone
     restart: unless-stopped
     environment:
       NETWORK: ${NBITCOIN_NETWORK:-regtest}
@@ -50,11 +50,12 @@ services:
     links:
       - clightning_bitcoin
     expose:
-     - "9737"
+      - "9737"
 
   clightning_bitcoin_rest:
-    image: saubyk/c-lightning-rest:0.2.1
+    image: saubyk/c-lightning-rest:0.3.0
     restart: unless-stopped
+    stop_signal: SIGKILL
     environment:
       PROTOCOL: "http"
       NODE: clightning_bitcoin:9835
@@ -68,24 +69,26 @@ services:
       - "3001"
 
   bitcoin_rtl:
-    image: shahanafarooqui/rtl:0.6.3
+    image: shahanafarooqui/rtl:0.9.2
     restart: unless-stopped
     environment:
       LN_IMPLEMENTATION: CLT
+      CONFIG_PATH: /root/.lightning/config
       LN_SERVER_URL: http://clightning_bitcoin_rest:3001/v1
       MACAROON_PATH: /etc/clightning_bitcoin_rest/certs
-      RTL_CONFIG_PATH: /data/RTL.conf
+      RTL_CONFIG_PATH: /data/
       BITCOIND_CONFIG_PATH: /etc/bitcoin/bitcoin.conf
       RTL_SSO: 1
       RTL_COOKIE_PATH: /data/.cookie
       LOGOUT_REDIRECT_LINK: /server/services
     volumes:
+      - "clightning_bitcoin_datadir:/root/.lightning"
       - "bitcoin_datadir:/etc/bitcoin"
       - "clightning_bitcoin_rtl_datadir:/data"
       - "clightning_bitcoin_rest_datadir:/etc/clightning_bitcoin_rest"
     expose:
-      - "3000"       
-       
+      - "3000"
+
   btcpayserver:
     environment:
       BTCPAY_BTCLIGHTNING: "type=clightning;server=unix://etc/clightning_bitcoin/lightning-rpc"
