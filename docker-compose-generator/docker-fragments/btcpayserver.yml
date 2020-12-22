@@ -4,7 +4,7 @@ services:
 
   btcpayserver:
     restart: unless-stopped
-    image: ${BTCPAY_IMAGE:-btcpayserver/btcpayserver:1.0.3.158}
+    image: ${BTCPAY_IMAGE:-btcpayserver/btcpayserver:1.0.6.4$<BTCPAY_BUILD_CONFIGURATION>?}
     expose:
       - "49392"
     environment:
@@ -18,14 +18,16 @@ services:
       BTCPAY_SSHKEYFILE: ${BTCPAY_SSHKEYFILE}
       BTCPAY_SSHAUTHORIZEDKEYS: ${BTCPAY_SSHAUTHORIZEDKEYS}
       BTCPAY_DEBUGLOG: btcpay.log
+      BTCPAY_UPDATEURL: https://api.github.com/repos/btcpayserver/btcpayserver/releases/latest
+      BTCPAY_DOCKERDEPLOYMENT: "true"
     links:
       - postgres
     networks:
       - nginx_net
       - btcpay
     volumes:
-     - "./btcpay_datadir:/datadir"
-     - "./nbxplorer_datadir:/root/.nbxplorer"
+      - "./btcpay_datadir:/datadir"
+      - "./nbxplorer_datadir:/root/.nbxplorer"
 
 networks:
   btcpay:
@@ -36,5 +38,6 @@ required:
   - "postgres"
   - "nbxplorer"
   - "btcpayserver"
+
 recommended:
   - "opt-add-tor"
